@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\SecureAgent.Core\SecureAgent.Core.csproj" />
     <ProjectReference Include="..\SecureAgent.Contracts\SecureAgent.Contracts.csproj" />
+    <ProjectReference Include="..\SecureAgent.Infrastructure\SecureAgent.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

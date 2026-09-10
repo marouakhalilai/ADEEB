@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using SecureAgent.Core.Domain;
 
 namespace SecureAgent.Contracts.Ipc;
@@ -29,6 +30,14 @@ namespace SecureAgent.Contracts.Ipc;
 /// security service itself.
 /// </para>
 /// </remarks>
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "$kind")]
+[JsonDerivedType(typeof(AppActivatedMessage), "app-activated")]
+[JsonDerivedType(typeof(EmbeddingMessage), "embedding")]
+[JsonDerivedType(typeof(VerificationResultMessage), "verification-result")]
+[JsonDerivedType(typeof(VerifyRequestMessage), "verify-request")]
+[JsonDerivedType(typeof(DecisionMessage), "decision")]
+[JsonDerivedType(typeof(PresencePingMessage), "presence-ping")]
+[JsonDerivedType(typeof(SessionChangedMessage), "session-changed")]
 public abstract record IpcMessage
 {
     /// <summary>Correlates a response with its request, and ties both to one audit record.</summary>
@@ -124,6 +133,31 @@ public sealed record VerifyRequestMessage : IpcMessage
 
     /// <summary>Whether the user should see a "verifying" affordance, or the check is silent.</summary>
     public required bool Interactive { get; init; }
+
+    /// <summary>
+    /// Identities that would satisfy the policy.
+    /// </summary>
+    /// <remarks>
+    /// Sent because the broker has no database access — by design, since it runs as the
+    /// interactive user. These are opaque identifiers, not secrets, and the service
+    /// re-checks any claimed match against the policy anyway: telling the broker what would
+    /// be acceptable does not let it grant itself anything.
+    /// </remarks>
+    public IReadOnlyList<Guid> AuthorizedUserIds { get; init; } = [];
+
+    /// <summary>
+    /// The identity bound to the signed-in Windows account, when one exists.
+    /// </summary>
+    /// <remarks>
+    /// Windows Hello attests the account owner and returns no identity of its own, so the
+    /// broker needs to be told which enrolled identity a Hello success corresponds to.
+    /// Null when no enrolled identity is bound to this Windows account, in which case the
+    /// Hello rung reports itself unavailable rather than guessing.
+    /// </remarks>
+    public Guid? AccountUserId { get; init; }
+
+    /// <summary>The application being protected, for the prompt and the overlay.</summary>
+    public string? AppDisplayName { get; init; }
 }
 
 /// <summary>The verdict, and what the broker should do about it.</summary>
@@ -140,6 +174,135 @@ public sealed record DecisionMessage : IpcMessage
     /// never assembled from device input, and never from a model.
     /// </summary>
     public string? UserFacingReason { get; init; }
+}
+
+/// <summary>
+/// A verdict from a verifier that performs its own matching.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Two shapes of verifier exist, and they report differently on purpose:
+/// </para>
+/// <list type="bullet">
+/// <item>
+/// The local face pipeline sends an <see cref="EmbeddingMessage"/>, because the templates it
+/// must be compared against live on the service side and must never enter the broker.
+/// </item>
+/// <item>
+/// Windows Hello and the PIN rung send this, because the match happens inside Windows or
+/// against a hash the service holds — there is no embedding to hand over, and the broker is
+/// reporting an outcome rather than evidence.
+/// </item>
+/// </list>
+/// <para>
+/// The service still decides. A broker claiming <c>Match</c> is a claim, not an
+/// authorisation: the service checks it against the policy's authorised identities and its
+/// required assurance before opening a session.
+/// </para>
+/// </remarks>
+public sealed record VerificationResultMessage : IpcMessage
+{
+    /// <summary>What the verifier determined.</summary>
+    public required VerificationOutcomeDto Outcome { get; init; }
+
+    /// <summary>The identity claimed, when one was recognised.</summary>
+    public Guid? MatchedUserId { get; init; }
+
+    /// <summary>Which rung answered.</summary>
+    public required VerifierKind Verifier { get; init; }
+
+    /// <summary>The assurance actually achieved.</summary>
+    public required AssuranceLevel Assurance { get; init; }
+
+    /// <summary>Bucketed confidence. Never a raw score.</summary>
+    public ConfidenceBucket Confidence { get; init; } = ConfidenceBucket.None;
+
+    /// <summary>Whether presentation-attack detection passed, when it ran.</summary>
+    public bool? LivenessPassed { get; init; }
+
+    /// <summary>Duration, for the latency SLO.</summary>
+    public required int ElapsedMs { get; init; }
+
+    /// <summary>Short non-sensitive reason for the audit record.</summary>
+    public string? Detail { get; init; }
+}
+
+/// <summary>
+/// Wire form of the verification outcome.
+/// </summary>
+/// <remarks>
+/// Mirrors the Core enum rather than referencing it, so the wire contract can be versioned
+/// independently of the internal type.
+/// </remarks>
+public enum VerificationOutcomeDto
+{
+    /// <summary>An authorised identity was recognised.</summary>
+    Match,
+
+    /// <summary>Someone was present and was not authorised.</summary>
+    NoMatch,
+
+    /// <summary>No usable answer. An empty chair is not an intruder.</summary>
+    Inconclusive,
+
+    /// <summary>No verifier could run at all.</summary>
+    Unavailable,
+}
+
+/// <summary>
+/// Reports that the user is still present, during continuous monitoring.
+/// </summary>
+/// <remarks>
+/// Sent by the broker only while a protected application holds the foreground and the user
+/// has been active recently. The service refreshes the session's presence timestamp; it
+/// does not extend the TTL, so continuous monitoring cannot keep a session alive past its
+/// lifetime.
+/// </remarks>
+public sealed record PresencePingMessage : IpcMessage
+{
+    /// <summary>The policy whose session is being refreshed.</summary>
+    public required Guid PolicyId { get; init; }
+
+    /// <summary>Windows terminal session.</summary>
+    public required int WindowsSessionId { get; init; }
+
+    /// <summary>Whether presence was confirmed. False drops the session.</summary>
+    public required bool Present { get; init; }
+}
+
+/// <summary>
+/// The Windows session changed state: lock, unlock, logoff, disconnect or user switch.
+/// </summary>
+/// <remarks>
+/// Every one of these drops all authentication sessions for that terminal session. A locked
+/// or switched desktop is a different person until proven otherwise.
+/// </remarks>
+public sealed record SessionChangedMessage : IpcMessage
+{
+    /// <summary>Windows terminal session that changed.</summary>
+    public required int WindowsSessionId { get; init; }
+
+    /// <summary>What happened.</summary>
+    public required SessionChangeKind Change { get; init; }
+}
+
+/// <summary>Kinds of Windows session state change that invalidate authentication.</summary>
+public enum SessionChangeKind
+{
+    /// <summary>Desktop locked.</summary>
+    Locked,
+
+    /// <summary>Desktop unlocked.</summary>
+    Unlocked,
+
+    /// <summary>User logged off.</summary>
+    LoggedOff,
+
+    /// <summary>Remote session disconnected.</summary>
+    Disconnected,
+
+    /// <summary>Fast user switch away from this session.</summary>
+    SwitchedAway,
 }
 
 // ---------------------------------------------------------------------------

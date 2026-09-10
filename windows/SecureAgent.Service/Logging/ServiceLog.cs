@@ -1,4 +1,8 @@
 using Microsoft.Extensions.Logging;
+using SecureAgent.Core.Audit;
+using SecureAgent.Core.Domain;
+using SecureAgent.Core.Policy;
+using SecureAgent.Contracts.Ipc;
 
 namespace SecureAgent.Service.Logging;
 
@@ -45,4 +49,85 @@ internal static partial class ServiceLog
         Level = LogLevel.Information,
         Message = "SecureAgent core service stopping")]
     public static partial void ServiceStopping(ILogger logger);
+
+    [LoggerMessage(
+        EventId = 1002,
+        Level = LogLevel.Information,
+        Message = "Local store ready at {DatabasePath}")]
+    public static partial void DatabaseReady(ILogger logger, string databasePath);
+
+    [LoggerMessage(
+        EventId = 1900,
+        Level = LogLevel.Critical,
+        Message = "Audit chain verification FAILED: {Fault} at index {Index} (event {EventId}). " +
+                  "This indicates tampering or storage corruption.")]
+    public static partial void ChainVerificationFailed(
+        ILogger logger, ChainFault fault, int index, string? eventId);
+
+    [LoggerMessage(
+        EventId = 1003,
+        Level = LogLevel.Information,
+        Message = "Audit chain verified intact ({Count} records)")]
+    public static partial void ChainVerified(ILogger logger, int count);
+
+    // ---- IPC, 1100-1199 ----
+
+    [LoggerMessage(
+        EventId = 1100,
+        Level = LogLevel.Information,
+        Message = "IPC listening on pipe {PipeName}")]
+    public static partial void IpcListening(ILogger logger, string pipeName);
+
+    [LoggerMessage(
+        EventId = 1101,
+        Level = LogLevel.Debug,
+        Message = "Broker connected")]
+    public static partial void BrokerConnected(ILogger logger);
+
+    [LoggerMessage(
+        EventId = 1102,
+        Level = LogLevel.Debug,
+        Message = "Broker disconnected: {Reason}")]
+    public static partial void BrokerDisconnected(ILogger logger, string reason);
+
+    [LoggerMessage(
+        EventId = 1103,
+        Level = LogLevel.Warning,
+        Message = "Broker sent a malformed frame; dropping the connection")]
+    public static partial void BrokerProtocolViolation(ILogger logger, Exception ex);
+
+    [LoggerMessage(
+        EventId = 1104,
+        Level = LogLevel.Error,
+        Message = "Failed to accept an IPC connection")]
+    public static partial void IpcAcceptFailed(ILogger logger, Exception ex);
+
+    // ---- Policy and decisions, 1200-1399 ----
+
+    [LoggerMessage(
+        EventId = 1200,
+        Level = LogLevel.Information,
+        Message = "Loaded {Count} polic(ies)")]
+    public static partial void PoliciesLoaded(ILogger logger, int count);
+
+    [LoggerMessage(
+        EventId = 1300,
+        Level = LogLevel.Information,
+        Message = "{App} activated: {Decision} (policy {PolicyName}, matched by {MatchedBy})")]
+    public static partial void ActivationDecided(
+        ILogger logger, string app, DecisionKind decision, string policyName, AppMatchKind matchedBy);
+
+    [LoggerMessage(
+        EventId = 1301,
+        Level = LogLevel.Information,
+        Message = "Verification {Result} for {App} via {Verifier} in {ElapsedMs}ms")]
+    public static partial void VerificationCompleted(
+        ILogger logger, VerificationOutcomeDto result, string app, VerifierKind verifier, int elapsedMs);
+
+    [LoggerMessage(
+        EventId = 1400,
+        Level = LogLevel.Warning,
+        Message = "Enforcing {Action} on {App}: {Reason}")]
+    public static partial void EnforcementApplied(
+        ILogger logger, EnforcementAction action, string app, string reason);
 }

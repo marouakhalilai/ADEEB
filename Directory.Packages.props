@@ -26,6 +26,9 @@
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.12" />
     <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.12" />
+    <!-- Note: System.IO.Pipes.AccessControl is deliberately NOT referenced.
+         NamedPipeServerStreamAcl ships in the Windows targeting pack on .NET 10, and
+         adding the standalone package trips NU1510. -->
   </ItemGroup>
 
   <!-- Persistence. EF Core 10.0.12 supersedes the 9.0.0 line whose transitive

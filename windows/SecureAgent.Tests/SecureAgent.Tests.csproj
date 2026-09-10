@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SecureAgent.Core\SecureAgent.Core.csproj" />
+    <ProjectReference Include="..\SecureAgent.Contracts\SecureAgent.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>

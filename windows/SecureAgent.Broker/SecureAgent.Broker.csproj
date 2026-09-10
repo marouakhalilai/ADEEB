@@ -5,12 +5,31 @@
        overlay. Holds no keys and no templates: it runs as the user, who may be the
        adversary (plan §02). -->
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <!-- Versioned Windows TFM so the WinRT projection is available: Windows Hello is
+         reached through Windows.Security.Credentials.UI.UserConsentVerifier, which has no
+         Win32 equivalent that performs the biometric prompt. SupportedOSPlatformVersion
+         stays at 1809 so the binary still loads on older Windows 10 — the Hello verifier
+         probes at runtime and reports itself unavailable rather than crashing. -->
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
     <RootNamespace>SecureAgent.Broker</RootNamespace>
     <OutputType>Exe</OutputType>
     <!-- No window at startup. The overlay is created on demand by the enforcement path. -->
-    <UseWindowsForms>false</UseWindowsForms>
+    <!-- WinForms is used for the enforcement overlay only, never for the dashboard (that
+         is WinUI 3, per CLAUDE.md). The overlay must appear within ~150ms of a deny
+         verdict; a WinForms borderless form starts fast enough, whereas a XAML island
+         would pay warm-up cost on the one path where latency is visible to an intruder.
+         The tradeoff is noted in docs/implementation-plan.md §06. -->
+    <UseWindowsForms>true</UseWindowsForms>
     <UseWPF>false</UseWPF>
+
+    <!-- Required by LibraryImport source-generated P/Invoke, which is why this is scoped to
+         the broker alone rather than set in Directory.Build.props. CLAUDE.md's coding style
+         says to avoid unsafe unless absolutely required; the alternative here is DllImport,
+         whose hand-written marshalling is the thing LibraryImport exists to make safer, so
+         the generator is the more conservative choice despite the flag it demands.
+         SecureAgent.Core, where the security decisions live, stays safe-only. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,6 +38,16 @@
     <PackageReference Include="Serilog.Settings.Configuration" />
     <PackageReference Include="Serilog.Sinks.Console" />
     <PackageReference Include="Serilog.Sinks.File" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Microsoft.NET.Sdk does not auto-include appsettings.json the way the Worker SDK
+         does. Without this the broker starts with empty configuration, Serilog is built
+         with no sinks, and it runs silently forever — no console output, no log file, and
+         no indication that anything is wrong. Explicit is the only safe option here. -->
+    <Content Include="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>

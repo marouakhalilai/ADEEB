@@ -1,8 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
+using SecureAgent.Broker.Enforcement;
 using SecureAgent.Core.Abstractions;
-using SecureAgent.Broker.Logging;
 using Serilog;
 
 namespace SecureAgent.Broker;
@@ -12,14 +11,14 @@ namespace SecureAgent.Broker;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Launched by the core service into each logged-on session; it is not a service itself
-/// and must not be installed as one. It exists because a Session 0 service cannot reach
-/// the desktop or the camera (plan §00, correction 1).
+/// Launched into each logged-on session; it is not a service itself and must not be
+/// installed as one. It exists because a Session 0 service cannot reach the desktop or the
+/// camera — the correction that shapes the whole client architecture.
 /// </para>
 /// <para>
-/// It is the untrusted half of the client. It runs with the user's token, so it holds no
-/// encryption keys and no enrolled templates, and it makes no policy decisions — it
-/// reports what it observes and does what the service tells it.
+/// It is the untrusted half of the client. It runs with the user's token, holds no
+/// encryption keys and no enrolled templates, and makes no policy decisions: it reports what
+/// it observes and does what the service tells it.
 /// </para>
 /// </remarks>
 public static class Program
@@ -33,7 +32,14 @@ public static class Program
 
         try
         {
-            var builder = Host.CreateApplicationBuilder(args);
+            // Pinned to the executable's directory for the same reason as the service: the
+            // broker is launched by the service, and inheriting whatever working directory
+            // that happened to have would silently strip its logging configuration.
+            var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
+            {
+                Args = args,
+                ContentRootPath = AppContext.BaseDirectory,
+            });
 
             builder.Services.AddSerilog((services, config) => config
                 .ReadFrom.Configuration(builder.Configuration)
@@ -41,6 +47,7 @@ public static class Program
                 .Enrich.FromLogContext());
 
             builder.Services.AddSingleton<ISystemClock, SystemClock>();
+            builder.Services.AddSingleton<OverlayHost>();
             builder.Services.AddHostedService<BrokerWorker>();
 
             await builder.Build().RunAsync();
@@ -55,34 +62,5 @@ public static class Program
         {
             await Log.CloseAndFlushAsync();
         }
-    }
-}
-
-/// <summary>
-/// The broker's loop.
-/// </summary>
-/// <remarks>
-/// A placeholder in Phase 0. Phase 2 adds the <c>SetWinEventHook</c> foreground watcher
-/// and the pipe client; Phase 3 adds capture and Windows Hello; Phase 4 adds the overlay.
-/// </remarks>
-public sealed class BrokerWorker : BackgroundService
-{
-    private readonly ILogger<BrokerWorker> _logger;
-
-    /// <summary>Creates the worker.</summary>
-    public BrokerWorker(ILogger<BrokerWorker> logger) => _logger = logger;
-
-    /// <inheritdoc />
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        // GetCurrentProcess() returns a disposable handle; the session id is read once at
-        // startup because it cannot change for the lifetime of this process.
-        using var self = System.Diagnostics.Process.GetCurrentProcess();
-        BrokerLog.BrokerReady(_logger, Environment.ProcessId, self.SessionId);
-
-        // Phase 2: connect to the service pipe, verify its Authenticode signature, install
-        // the foreground hook, and pump messages. A hook needs a message loop in the
-        // interactive session, which is precisely why this process exists.
-        return Task.CompletedTask;
     }
 }
