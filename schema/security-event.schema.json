@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://secureagent.dev/schema/security-event.schema.json",
+  "title": "SecurityEvent",
+  "description": "The append-only audit record produced by the SecureAgent core service. This schema is the single source of truth for the C# service, the TypeScript control plane, and the AI analyst case file. All string fields sourced from the device are UNTRUSTED input (see CLAUDE.md rule 23).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "ts", "kind", "severity", "outcome", "windowsSessionId", "hash"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Client-generated ULID. Primary key everywhere; makes ingest idempotent.",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Wall-clock time of the event, UTC, ISO 8601. For display and correlation only — never for TTL arithmetic (rule 22)."
+    },
+    "deviceId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Assigned at cloud enrolment. Absent on events recorded before enrolment."
+    },
+    "windowsSessionId": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Windows terminal session ID. Auth sessions never cross this boundary."
+    },
+    "kind": { "$ref": "#/$defs/eventKind" },
+    "severity": { "$ref": "#/$defs/severity" },
+    "outcome": { "$ref": "#/$defs/outcome" },
+    "policyId": { "type": ["string", "null"], "format": "uuid" },
+    "userId": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "The enrolled identity that matched, or null when unknown/unmatched."
+    },
+    "app": { "$ref": "#/$defs/appRef" },
+    "verifier": { "$ref": "#/$defs/verifierKind" },
+    "confidence": { "$ref": "#/$defs/confidenceBucket" },
+    "livenessPassed": { "type": ["boolean", "null"] },
+    "elapsedMs": { "type": ["integer", "null"], "minimum": 0 },
+    "action": {
+      "description": "The enforcement action actually taken, if any.",
+      "enum": ["None", "Overlay", "Minimize", "LockApp", "LockWorkstation", null]
+    },
+    "prevHash": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 of the previous event in this device's chain. Null only for the genesis record."
+    },
+    "hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 over the canonical serialization of this record with prevHash included. Breaking the chain is itself a reportable condition."
+    },
+    "meta": {
+      "type": "object",
+      "description": "Bounded, low-cardinality supplementary fields. MUST NOT contain embeddings, similarity scores, image data, or unbounded attacker-controlled text.",
+      "additionalProperties": { "type": ["string", "number", "boolean", "null"] },
+      "maxProperties": 16
+    }
+  },
+  "$defs": {
+    "eventKind": {
+      "enum": [
+        "AppActivated",
+        "VerificationRequested",
+        "VerificationSucceeded",
+        "VerificationFailed",
+        "VerificationInconclusive",
+        "VerifierUnavailable",
+        "SessionOpened",
+        "SessionExpired",
+        "AbsenceDetected",
+        "EnforcementApplied",
+        "RecoveryCodeUsed",
+        "EnrollmentCompleted",
+        "EnrollmentRevoked",
+        "PolicyChanged",
+        "PresenceDegraded",
+        "BrokerRestarted",
+        "TamperSuspected",
+        "EngineFault",
+        "VaultFault",
+        "ClockAnomaly",
+        "SessionChanged",
+        "ChainVerificationFailed"
+      ]
+    },
+    "severity": {
+      "enum": ["Info", "Notice", "Warning", "High", "Critical"],
+      "description": "Deterministically assigned by the service. The AI analyst may comment on severity but never rewrites this field."
+    },
+    "outcome": {
+      "enum": ["Allowed", "Denied", "Degraded", "NotApplicable"]
+    },
+    "verifierKind": {
+      "enum": ["Session", "WindowsHello", "LocalFace", "Pin", "RecoveryCode", "None", null]
+    },
+    "confidenceBucket": {
+      "enum": ["High", "Medium", "Low", "None", null],
+      "description": "Buckets only. Raw similarity scores are a biometric proxy and are never persisted or logged (rule 25)."
+    },
+    "appRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["matchKind"],
+      "properties": {
+        "matchKind": {
+          "enum": ["PublisherSignature", "FullPath", "FileName", "Unresolved"],
+          "description": "Which rule resolved this application. Telemetry on this field tells us how often we are falling back to the weak FileName rule."
+        },
+        "fileName": { "type": "string", "maxLength": 260 },
+        "publisherCn": { "type": ["string", "null"], "maxLength": 256 },
+        "pathHash": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256 of the full executable path. The path itself is not synced — it can contain the user's name."
+        },
+        "windowTitle": {
+          "type": ["string", "null"],
+          "maxLength": 64,
+          "description": "UNTRUSTED, opt-in only, truncated. Attacker-controlled text: a window can be titled anything, including prompt-injection payloads. Must be delimited as evidence, never as instruction, before reaching any model (rule 23)."
+        }
+      }
+    }
+  }
+}

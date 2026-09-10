@@ -1,0 +1,32 @@
+# Normalise line endings in the repository, check out native on Windows.
+* text=auto
+
+# Source and config: explicit, so no platform surprises.
+*.cs      text diff=csharp
+*.csproj  text
+*.slnx    text
+*.props   text
+*.json    text
+*.yml     text
+*.md      text
+*.ps1     text eol=crlf
+*.sh      text eol=lf
+
+# Binary — never touched by EOL conversion or diffed as text.
+*.onnx    binary
+*.png     binary
+*.ico     binary
+*.pfx     binary
+*.msi     binary
+*.zip     binary
+
+# The audit chain's canonical form is a byte-level contract: field separators are written
+# as escapes precisely so that no tool rewrites them, and the schema below is hashed and
+# signed downstream. Pinning these to LF keeps a checkout on another platform from
+# producing different bytes than the one that sealed the records.
+schema/*.json           text eol=lf
+windows/SecureAgent.Core/Audit/*.cs  text eol=lf
+
+# Keep generated and vendored content out of language statistics and diffs.
+models/*      linguist-vendored
+installer/out/**  linguist-generated

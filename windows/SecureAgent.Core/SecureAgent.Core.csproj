@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Deliberately NOT net10.0-windows. CLAUDE.md rule 20: Core carries the security
+       decisions and must compile and test on Linux, both to keep it free of platform
+       coupling and to keep the bulk of CI on cheap runners (plan §10). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>SecureAgent.Core</RootNamespace>
+  </PropertyGroup>
+
+</Project>

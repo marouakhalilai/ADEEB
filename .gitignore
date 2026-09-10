@@ -1,0 +1,54 @@
+## .NET
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+artifacts/
+TestResults/
+*.coverage
+*.trx
+
+## Rider / VS Code
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+
+## Node / cloud
+node_modules/
+dist/
+.next/
+*.tsbuildinfo
+
+## Secrets and local config — never commit
+.env
+.env.*
+!.env.example
+appsettings.Local.json
+appsettings.*.Local.json
+secrets.json
+*.pfx
+*.snk
+*.pem
+*.key
+
+## Local runtime state — contains encrypted biometric templates
+*.db
+*.db-shm
+*.db-wal
+/localstate/
+
+## Model weights are large; fetched by scripts/fetch-models.ps1
+models/*.onnx
+models/*.bin
+
+## Build output
+installer/out/
+publish/

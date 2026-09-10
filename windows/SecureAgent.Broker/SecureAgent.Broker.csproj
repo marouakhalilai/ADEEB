@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The interactive-session half of the client. Runs as the logged-on user, one
+       instance per session. Owns the foreground hook, the camera, Windows Hello and the
+       overlay. Holds no keys and no templates: it runs as the user, who may be the
+       adversary (plan §02). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>SecureAgent.Broker</RootNamespace>
+    <OutputType>Exe</OutputType>
+    <!-- No window at startup. The overlay is created on demand by the enforcement path. -->
+    <UseWindowsForms>false</UseWindowsForms>
+    <UseWPF>false</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Serilog.Extensions.Hosting" />
+    <PackageReference Include="Serilog.Settings.Configuration" />
+    <PackageReference Include="Serilog.Sinks.Console" />
+    <PackageReference Include="Serilog.Sinks.File" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SecureAgent.Core\SecureAgent.Core.csproj" />
+    <ProjectReference Include="..\SecureAgent.Contracts\SecureAgent.Contracts.csproj" />
+    <ProjectReference Include="..\SecureAgent.Face\SecureAgent.Face.csproj" />
+  </ItemGroup>
+
+</Project>

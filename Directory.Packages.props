@@ -1,0 +1,54 @@
+<Project>
+
+  <!-- Central Package Management: every dependency version for the whole solution is
+       declared here and nowhere else.
+
+       For a security product this is a control, not a convenience. It gives one file to
+       audit, one place to apply a CVE bump, and it makes version drift between projects
+       impossible — the situation where SecureAgent.Service and SecureAgent.Infrastructure
+       quietly resolve different versions of the same transitive dependency, and a patched
+       library in one is unpatched in the other.
+
+       NuGetAudit is left on and escalated: with TreatWarningsAsErrors, a package with a
+       known advisory fails the build rather than printing a warning nobody reads. That
+       caught SQLitePCLRaw.lib.e_sqlite3 2.1.10 (GHSA-2m69-gcr7-jv3q, high severity) on the
+       very first restore of this repository, pulled in transitively by EF Core 9. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>low</NuGetAuditLevel>
+  </PropertyGroup>
+
+  <!-- Runtime and framework: pinned to the .NET 10 LTS line. -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.12" />
+    <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.12" />
+  </ItemGroup>
+
+  <!-- Persistence. EF Core 10.0.12 supersedes the 9.0.0 line whose transitive
+       SQLitePCLRaw carried a high-severity advisory. -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" />
+  </ItemGroup>
+
+  <!-- Logging. -->
+  <ItemGroup>
+    <PackageVersion Include="Serilog.Extensions.Hosting" Version="10.0.0" />
+    <PackageVersion Include="Serilog.Settings.Configuration" Version="10.0.1" />
+    <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
+    <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
+  </ItemGroup>
+
+  <!-- Test. -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.0" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
+    <PackageVersion Include="coverlet.collector" Version="10.0.1" />
+  </ItemGroup>
+
+</Project>

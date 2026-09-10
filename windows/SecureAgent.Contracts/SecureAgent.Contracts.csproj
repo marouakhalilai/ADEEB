@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The wire format between the Session 0 service and the session broker, and between
+       the device and the control plane. Portable for the same reason as Core (rule 20). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>SecureAgent.Contracts</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SecureAgent.Core\SecureAgent.Core.csproj" />
+  </ItemGroup>
+
+</Project>

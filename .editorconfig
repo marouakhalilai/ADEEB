@@ -1,0 +1,62 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+indent_style = space
+trim_trailing_whitespace = true
+
+[*.{md,json,yml,yaml}]
+indent_size = 2
+
+[*.cs]
+indent_size = 4
+
+# Style
+csharp_new_line_before_open_brace = all
+csharp_prefer_braces = true:warning
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_style_var_when_type_is_apparent = true:suggestion
+dotnet_sort_system_directives_first = true
+dotnet_style_require_accessibility_modifiers = for_non_interface_members:warning
+dotnet_style_readonly_field = true:warning
+
+# Naming
+dotnet_naming_rule.private_fields_underscore.severity = warning
+dotnet_naming_rule.private_fields_underscore.symbols = private_fields
+dotnet_naming_rule.private_fields_underscore.style = underscore_camel
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+dotnet_naming_style.underscore_camel.required_prefix = _
+dotnet_naming_style.underscore_camel.capitalization = camel_case
+
+# Correctness rules worth failing the build over in a security product.
+dotnet_diagnostic.CA2007.severity = none        # ConfigureAwait: no sync context in service/worker
+dotnet_diagnostic.CA1848.severity = none        # LoggerMessage source-gen: not worth it yet
+dotnet_diagnostic.CA5350.severity = error       # Weak crypto
+dotnet_diagnostic.CA5351.severity = error       # Broken crypto
+dotnet_diagnostic.CA5379.severity = error       # Weak KDF algorithm
+dotnet_diagnostic.CA5394.severity = error       # Insecure randomness
+dotnet_diagnostic.CA2100.severity = error       # SQL injection
+dotnet_diagnostic.CA3075.severity = error       # Insecure DTD processing
+
+# CA1819 wants collection properties instead of arrays. Face embeddings are deliberately
+# float[]: they are fixed-length numeric buffers passed to native inference code, and the
+# vault must be able to zero them on dispose. A defensive copy per access would both cost
+# per-verification latency and leave extra plaintext copies of biometric material on the
+# heap — the opposite of what we want.
+dotnet_diagnostic.CA1819.severity = none
+
+[windows/SecureAgent.Tests/**.cs]
+# Test names are sentences, and read far better as such in failure output.
+dotnet_diagnostic.CA1707.severity = none
+# Tests are not a public API surface.
+dotnet_diagnostic.CA1062.severity = none
+dotnet_diagnostic.CS1591.severity = none
+
+[*.{ts,tsx,js}]
+indent_size = 2
+
+[*.ps1]
+indent_size = 4

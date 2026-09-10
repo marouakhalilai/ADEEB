@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The face engine lives behind interfaces so the recognition model can be replaced
+       without touching the security agent (CLAUDE.md rule 2). Portable target: the
+       abstractions and the matcher are pure maths and must be testable on Linux. The
+       ONNX-backed implementations arrive in Phase 3 and bring the native dependency
+       with them. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>SecureAgent.Face</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SecureAgent.Core\SecureAgent.Core.csproj" />
+    <ProjectReference Include="..\SecureAgent.Contracts\SecureAgent.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

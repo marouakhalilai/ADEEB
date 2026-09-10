@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  # The majority of the test suite runs here. Linux runners bill at half the rate of
+  # Windows ones (plan §10), and this job is also what enforces CLAUDE.md rule 20:
+  # if someone slips a Windows-only reference into Core, this fails.
+  portable:
+    name: Portable (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore SecureAgent.slnx
+
+      - name: Build portable projects
+        run: |
+          dotnet build windows/SecureAgent.Core/SecureAgent.Core.csproj -c Release --no-restore
+          dotnet build windows/SecureAgent.Contracts/SecureAgent.Contracts.csproj -c Release --no-restore
+
+      - name: Test (portable subset)
+        run: >
+          dotnet test windows/SecureAgent.Tests/SecureAgent.Tests.csproj
+          -c Release --no-restore
+          --filter Category=Portable
+          --logger "trx;LogFileName=portable.trx"
+          --collect:"XPlat Code Coverage"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: portable-test-results
+          path: "**/TestResults/**"
+
+  windows:
+    name: Full (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore SecureAgent.slnx
+
+      - name: Build
+        run: dotnet build SecureAgent.slnx -c Release --no-restore
+
+      - name: Test (all)
+        run: >
+          dotnet test SecureAgent.slnx -c Release --no-restore --no-build
+          --logger "trx;LogFileName=full.trx"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-test-results
+          path: "**/TestResults/**"
+
+  # A tripwire for the redaction rules in CLAUDE.md (19, 25), not a proof.
+  #
+  # Both patterns below were tested against known-bad and known-good samples before being
+  # committed — an untested guard is worse than no guard, because it manufactures
+  # confidence. A known blind spot remains: grep is line-based, so
+  #     var bmp = capture.ToBitmap();
+  #     bmp.Save(path);
+  # is not caught, because the second line names no frame-like token. The real gates are
+  # BiometricRedactionEnricher and its unit test; this only catches the obvious mistake
+  # early and cheaply.
+  forbidden-patterns:
+    name: Forbidden patterns
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: No biometric material in logs or on disk
+        shell: bash
+        run: |
+          set -uo pipefail
+          fail=0
+
+          # Logging an embedding, a raw similarity score, or frame data.
+          if grep -rnE 'Log(Information|Debug|Warning|Error|Trace)\(.*(embedding|Embedding|similarity|Similarity|score|Score)' \
+               --include='*.cs' windows/ 2>/dev/null; then
+            echo "::error::Biometric material referenced in a log statement (CLAUDE.md rule 25). Log a ConfidenceBucket instead."
+            fail=1
+          fi
+
+          # Writing frame data to disk, in either order: File.WriteAllBytes(p, frameBytes)
+          # and frame.Save(p). The token can precede or follow the call, so match the line.
+          if grep -rnE --include='*.cs' \
+               '\.(Save|SaveTo|WriteAllBytes|WriteAllText|WriteAllBytesAsync|WriteAllTextAsync|WriteTo|CopyTo)\(' \
+               windows/ 2>/dev/null \
+               | grep -Ei '(frame|bitmap|image|pixel|[^a-zA-Z]mat[^a-zA-Z])'; then
+            echo "::error::Camera frame appears to be written to disk (CLAUDE.md rule 19). Frames never leave the broker's memory."
+            fail=1
+          fi
+
+          exit $fail

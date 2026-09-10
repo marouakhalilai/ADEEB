@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Portable test project: net10.0, not net10.0-windows, so the bulk of the suite runs
+       on Linux CI (plan §10). Windows-only tests get their own project when P2 lands. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>SecureAgent.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SecureAgent.Core\SecureAgent.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Keeps SchemaParityTests honest without a copy of the schema drifting in-tree. -->
+    <None Include="..\..\schema\security-event.schema.json" CopyToOutputDirectory="PreserveNewest" Link="schema\security-event.schema.json" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Persistence, the template vault, key management and the sync outbox.
+       net10.0-windows because the key hierarchy is TPM-backed through CNG and DPAPI,
+       neither of which has a portable equivalent (plan §07). Anything here that does not
+       need Windows belongs in Core instead. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>SecureAgent.Infrastructure</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SecureAgent.Core\SecureAgent.Core.csproj" />
+    <ProjectReference Include="..\SecureAgent.Contracts\SecureAgent.Contracts.csproj" />
+    <ProjectReference Include="..\SecureAgent.Face\SecureAgent.Face.csproj" />
+  </ItemGroup>
+
+</Project>

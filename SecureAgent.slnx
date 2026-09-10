@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/windows/">
+    <Project Path="windows/SecureAgent.Core/SecureAgent.Core.csproj" />
+    <Project Path="windows/SecureAgent.Contracts/SecureAgent.Contracts.csproj" />
+    <Project Path="windows/SecureAgent.Face/SecureAgent.Face.csproj" />
+    <Project Path="windows/SecureAgent.Infrastructure/SecureAgent.Infrastructure.csproj" />
+    <Project Path="windows/SecureAgent.Service/SecureAgent.Service.csproj" />
+    <Project Path="windows/SecureAgent.Broker/SecureAgent.Broker.csproj" />
+    <Project Path="windows/SecureAgent.Tests/SecureAgent.Tests.csproj" />
+  </Folder>
+</Solution>
