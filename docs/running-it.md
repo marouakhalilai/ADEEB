@@ -150,3 +150,18 @@ copy of the output folder will do it.
 **Stale binaries.** The broker's output folder changed when its TFM was versioned. If you
 have an old `bin\Release\net10.0-windows` folder under `SecureAgent.Broker`, delete it — it
 contains a pre-change build that will run and misbehave.
+
+**"You must install .NET to run this application."** The SDK on this machine lives in
+`%LOCALAPPDATA%\Microsoft\dotnet`, which is not one of the locations the app host searches by
+default, and there is no registry entry pointing at it. `DOTNET_ROOT` is what bridges the
+gap. It is set at user level, so a **newly opened** terminal works — but any shell opened
+before that variable existed still has the old environment and will fail. Open a fresh
+terminal, or set it for the session:
+
+    $env:DOTNET_ROOT = "$env:LOCALAPPDATA\Microsoft\dotnet"
+
+This is a development-time wrinkle, but it points at a real packaging decision for later:
+the installer should ship a **self-contained** publish (`dotnet publish -r win-x64
+--self-contained`) rather than a framework-dependent one. A security agent that silently
+fails to start because a machine has no .NET runtime, or has it somewhere unexpected, is
+worse than one that is a hundred megabytes larger.
