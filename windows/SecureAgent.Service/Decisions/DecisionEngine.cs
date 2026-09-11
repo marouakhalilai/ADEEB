@@ -37,9 +37,17 @@ public sealed class DecisionEngine
     private readonly Dictionary<Guid, int> _consecutiveFailures = [];
     private readonly Lock _failureGate = new();
 
-    // Correlates an in-flight verification with the activation that triggered it.
-    private readonly Dictionary<string, PendingVerification> _pending = [];
+    // Correlates in-flight verifications with the activations that triggered them, and
+    // suppresses a second prompt while one is already on screen.
+    private readonly IVerificationTracker _inFlight;
+
+    // The policy behind each outstanding verification, so a result can be evaluated against
+    // the policy as it stood when the prompt was raised.
+    private readonly Dictionary<string, ApplicationPolicy> _pendingPolicies = [];
     private readonly Lock _pendingGate = new();
+
+    /// <summary>How long the broker is given to answer a verification request.</summary>
+    public static readonly TimeSpan VerifyTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>Creates the engine.</summary>
     public DecisionEngine(
@@ -47,6 +55,7 @@ public sealed class DecisionEngine
         IPolicyRepository policies,
         IAuditRepository audit,
         IAuthSessionStore sessions,
+        IVerificationTracker inFlight,
         ISystemClock clock,
         ILogger<DecisionEngine> logger)
     {
@@ -54,14 +63,10 @@ public sealed class DecisionEngine
         _policies = policies;
         _audit = audit;
         _sessions = sessions;
+        _inFlight = inFlight;
         _clock = clock;
         _logger = logger;
     }
-
-    private sealed record PendingVerification(
-        ApplicationPolicy Policy,
-        AppRef App,
-        int WindowsSessionId);
 
     /// <summary>
     /// Handles a foreground activation reported by the broker.
@@ -137,10 +142,28 @@ public sealed class DecisionEngine
                 };
 
             case DecisionKind.VerificationRequired:
+                // Dismissing the Hello prompt returns focus to the protected application,
+                // which raises another foreground event while this verification is still in
+                // flight. Without this guard the user is prompted on top of the prompt they
+                // are already answering — observed as three requests for one app launch.
+                var pending = new PendingVerification(
+                    message.CorrelationId,
+                    policy.Id,
+                    message.WindowsSessionId,
+                    app,
+                    _clock.Ticks);
+
+                if (!_inFlight.TryBegin(pending, _clock.Ticks))
+                {
+                    // A prompt is already up for this application. Say nothing: the broker
+                    // is waiting on the first request and will act on its decision.
+                    ServiceLog.VerificationSuppressed(_logger, app.FileName, policy.DisplayName);
+                    return null;
+                }
+
                 lock (_pendingGate)
                 {
-                    _pending[message.CorrelationId] =
-                        new PendingVerification(policy, app, message.WindowsSessionId);
+                    _pendingPolicies[message.CorrelationId] = policy;
                 }
 
                 await RecordAsync(
@@ -160,7 +183,7 @@ public sealed class DecisionEngine
                 {
                     CorrelationId = message.CorrelationId,
                     MinimumAssurance = policy.MinimumAssurance,
-                    TimeoutMs = 30_000,
+                    TimeoutMs = (int)VerifyTimeout.TotalMilliseconds,
                     Interactive = true,
                     AuthorizedUserIds = policy.AuthorizedUserIds,
                     AccountUserId = await ResolveAccountIdentityAsync(policy, ct),
@@ -186,20 +209,22 @@ public sealed class DecisionEngine
     {
         ArgumentNullException.ThrowIfNull(message);
 
-        PendingVerification? pending;
+        var pending = _inFlight.Complete(message.CorrelationId);
+
+        ApplicationPolicy? policy;
         lock (_pendingGate)
         {
-            _pending.Remove(message.CorrelationId, out pending);
+            _pendingPolicies.Remove(message.CorrelationId, out policy);
         }
 
-        if (pending is null)
+        if (pending is null || policy is null)
         {
-            // A result for an activation we never asked about. Either a stale reply after a
-            // restart, or a broker inventing traffic. Neither is actionable.
+            // A result for an activation we never asked about: a stale reply after a
+            // restart, an answer that arrived after the tracker gave up on it, or a broker
+            // inventing traffic. None of those is actionable, and acting on one would mean
+            // opening a session on an unsolicited claim.
             return null;
         }
-
-        var policy = pending.Policy;
 
         ServiceLog.VerificationCompleted(
             _logger, message.Outcome, pending.App.FileName,
@@ -209,16 +234,16 @@ public sealed class DecisionEngine
         {
             case VerificationOutcomeDto.Match
                 when IsClaimAcceptable(message, policy):
-                return await AllowAsync(message, pending, ct);
+                return await AllowAsync(message, pending, policy, ct);
 
             case VerificationOutcomeDto.Match:
                 // Claimed a match the policy does not admit: wrong identity, or an assurance
                 // level below what the policy demands.
                 return await DenyAsync(
-                    message, pending, "Verified identity is not authorised for this application.", ct);
+                    message, pending, policy, "Verified identity is not authorised for this application.", ct);
 
             case VerificationOutcomeDto.NoMatch:
-                return await DenyAsync(message, pending, "Not recognised.", ct);
+                return await DenyAsync(message, pending, policy, "Not recognised.", ct);
 
             case VerificationOutcomeDto.Inconclusive:
                 // An empty chair is not an intruder. Log it and leave the application alone.
@@ -243,7 +268,7 @@ public sealed class DecisionEngine
                 };
 
             case VerificationOutcomeDto.Unavailable:
-                return await HandleUnavailableAsync(message, pending, ct);
+                return await HandleUnavailableAsync(message, pending, policy, ct);
 
             default:
                 return null;
@@ -280,9 +305,9 @@ public sealed class DecisionEngine
     private async Task<IpcMessage> AllowAsync(
         VerificationResultMessage message,
         PendingVerification pending,
+        ApplicationPolicy policy,
         CancellationToken ct)
     {
-        var policy = pending.Policy;
         var now = _clock.Ticks;
 
         _sessions.Open(new AuthSession
@@ -324,10 +349,10 @@ public sealed class DecisionEngine
     private async Task<IpcMessage> DenyAsync(
         VerificationResultMessage message,
         PendingVerification pending,
+        ApplicationPolicy policy,
         string reason,
         CancellationToken ct)
     {
-        var policy = pending.Policy;
         var failures = RecordFailure(policy.Id);
 
         // Severity escalates once the policy's threshold is crossed. One failed check is
@@ -375,10 +400,9 @@ public sealed class DecisionEngine
     private async Task<IpcMessage> HandleUnavailableAsync(
         VerificationResultMessage message,
         PendingVerification pending,
+        ApplicationPolicy policy,
         CancellationToken ct)
     {
-        var policy = pending.Policy;
-
         var (outcome, action, reason) = policy.OnVerifierUnavailable switch
         {
             UnavailableAction.Enforce => (
@@ -423,7 +447,13 @@ public sealed class DecisionEngine
         ArgumentNullException.ThrowIfNull(message);
 
         var dropped = _sessions.CloseAllForWindowsSession(message.WindowsSessionId);
-        if (dropped == 0)
+
+        // A verification that was in flight when the desktop locked is answering a question
+        // about a person who is no longer necessarily there. Abandon it rather than let a
+        // late result open a session for a session that has since changed hands.
+        var abandoned = _inFlight.AbandonSession(message.WindowsSessionId);
+
+        if (dropped == 0 && abandoned == 0)
         {
             return;
         }

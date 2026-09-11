@@ -117,6 +117,14 @@ internal static partial class ServiceLog
     public static partial void ActivationDecided(
         ILogger logger, string app, DecisionKind decision, string policyName, AppMatchKind matchedBy);
 
+    // Logged at Debug, not Information: suppression is the normal case whenever a prompt is
+    // on screen, and at Information it would be noise on every single verification.
+    [LoggerMessage(
+        EventId = 1302,
+        Level = LogLevel.Debug,
+        Message = "Suppressed a duplicate verification for {App} ({PolicyName}); one is already in flight")]
+    public static partial void VerificationSuppressed(ILogger logger, string app, string policyName);
+
     [LoggerMessage(
         EventId = 1301,
         Level = LogLevel.Information,

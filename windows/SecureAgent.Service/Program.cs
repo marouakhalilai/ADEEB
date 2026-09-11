@@ -100,6 +100,7 @@ public static class Program
 
         builder.Services.AddSingleton<IPolicyEngine, PolicyEngine>();
         builder.Services.AddSingleton<IAuthSessionStore, InMemoryAuthSessionStore>();
+        builder.Services.AddSingleton<IVerificationTracker>(_ => new VerificationTracker());
         builder.Services.AddSingleton<DecisionEngine>();
 
         builder.Services.AddHostedService<AgentWorker>();
